@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 43938 a0a9bf78ef40b69cf40aa14f458fffcbbeb11e58 $
-  $Date: 2022-09-02 11:26:16 $
+  $Revision: 44013 15bbcf7973d643e20fc10210417bd85668e7c0ea $
+  $Date: 2022-10-27 20:22:54 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -1395,12 +1395,6 @@ function onSection() {
   gMotionModal.reset();
 
   var initialPosition = getFramePosition(currentSection.getInitialPosition());
-  if (!retracted && !insertToolCall) {
-    if (getCurrentPosition().z < initialPosition.z) {
-      writeBlock(gMotionModal.format(0), zOutput.format(initialPosition.z));
-      zIsOutput = true;
-    }
-  }
 
   if (insertToolCall || !lengthCompensationActive || operationNeedsSafeStart || retracted || (!isFirstSection() && getPreviousSection().isMultiAxis())) {
     var _skipBlock = !(insertToolCall || retracted);
@@ -1446,6 +1440,11 @@ function onSection() {
     zIsOutput = true;
     gMotionModal.reset();
     if (_skipBlock) {
+      if (getCurrentPosition().z < initialPosition.z) {
+        zOutput.reset();
+        writeBlock(gMotionModal.format(0), zOutput.format(initialPosition.z));
+        zIsOutput = true;
+      }
       forceXYZ();
       var x = xOutput.format(initialPosition.x);
       var y = yOutput.format(initialPosition.y);
@@ -1453,6 +1452,10 @@ function onSection() {
     }
 
   } else {
+    if ((getCurrentPosition().z < initialPosition.z) && !retracted) {
+      writeBlock(gMotionModal.format(0), zOutput.format(initialPosition.z));
+      zIsOutput = true;
+    }
     writeBlock(
       gAbsIncModal.format(90),
       gMotionModal.format(0),
@@ -1463,7 +1466,7 @@ function onSection() {
   // set coolant after we have positioned at Z
   setCoolant(tool.coolant);
 
-  validate(lengthCompensationActive, "Length compensation is not active.");
+  validate(lengthCompensationActive, "Tool length compensation is not active.");
 
   // define subprogram
   subprogramDefine(initialPosition, abc, retracted, zIsOutput);
