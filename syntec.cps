@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44061 7a343a3a908d7f2be43c39898815a09ee8c42a27 $
-  $Date: 2023-04-13 07:43:26 $
+  $Revision: 44063 957e0786edfb03367dd79f0277f5189d621e4f03 $
+  $Date: 2023-04-28 16:43:54 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -232,7 +232,7 @@ wcsDefinitions = {
 var gFormat = createFormat({prefix:"G", width:2, zeropad:true, decimals:1});
 var mFormat = createFormat({prefix:"M", width:2, zeropad:true, decimals:1});
 var hFormat = createFormat({prefix:"H", width:2, zeropad:true, decimals:1});
-var dFormat = createFormat({prefix:"D", width:2, zeropad:true, decimals:1});
+var diameterOffsetFormat = createFormat({prefix:"D", width:2, zeropad:true, decimals:1});
 
 var xyzFormat = createFormat({decimals:(unit == MM ? 3 : 4), forceDecimal:true});
 var ijkFormat = createFormat({decimals:6, forceDecimal:true}); // unitless
@@ -263,7 +263,6 @@ var feedOutput = createVariable({prefix:"F"}, feedFormat);
 var inverseTimeOutput = createVariable({prefix:"F", force:true}, inverseTimeFormat);
 var pitchOutput = createVariable({prefix:"F", force:true}, pitchFormat);
 var sOutput = createVariable({prefix:"S", force:true}, rpmFormat);
-var dOutput = createVariable({}, dFormat);
 var peckOutput = createVariable({prefix:"Q", force:true}, peckFormat);
 
 // circular output
@@ -353,7 +352,7 @@ var settings = {
     prefix               : "(", // specifies the prefix for the comment
     suffix               : ")", // specifies the suffix for the comment
     upperCase            : true, // set to true to output all comments in upper case
-    maximumLineLength    : 80, // the maximum number of charaters allowed in a line
+    maximumLineLength    : 80, // the maximum number of charaters allowed in a line, set to 0 to disable comment output
   },
   maximumSequenceNumber   : 8999, // the maximum sequence number (Nxxx), use 'undefined' for unlimited
   supportsToolVectorOutput: true // specifies if the control does support tool axis vector output for multi axis toolpath
@@ -1289,7 +1288,10 @@ function writeComment(text) {
   }
   var comments = String(text).split("\n");
   for (comment in comments) {
-    writeln(formatComment(comments[comment]));
+    var _comment = formatComment(comments[comment]);
+    if (_comment) {
+      writeln(_comment);
+    }
   }
 }
 
@@ -2295,6 +2297,10 @@ function onRapid(_x, _y, _z) {
 // <<<<< INCLUDED FROM include_files/onRapid_fanuc.cpi
 // >>>>> INCLUDED FROM include_files/onLinear_fanuc.cpi
 function onLinear(_x, _y, _z, feed) {
+  if (pendingRadiusCompensation >= 0) {
+    xOutput.reset();
+    yOutput.reset();
+  }
   var x = xOutput.format(_x);
   var y = yOutput.format(_y);
   var z = zOutput.format(_z);
@@ -2302,16 +2308,14 @@ function onLinear(_x, _y, _z, feed) {
   if (x || y || z) {
     if (pendingRadiusCompensation >= 0) {
       pendingRadiusCompensation = -1;
-      var d = tool.diameterOffset;
+      var d = getSetting("outputToolDiameterOffset", true) ? diameterOffsetFormat.format(tool.diameterOffset) : "";
       writeBlock(gPlaneModal.format(17));
       switch (radiusCompensation) {
       case RADIUS_COMPENSATION_LEFT:
-        dOutput.reset();
-        writeBlock(gMotionModal.format(1), gFormat.format(41), x, y, z, dOutput.format(d), f);
+        writeBlock(gMotionModal.format(1), gFormat.format(41), x, y, z, d, f);
         break;
       case RADIUS_COMPENSATION_RIGHT:
-        dOutput.reset();
-        writeBlock(gMotionModal.format(1), gFormat.format(42), x, y, z, dOutput.format(d), f);
+        writeBlock(gMotionModal.format(1), gFormat.format(42), x, y, z, d, f);
         break;
       default:
         writeBlock(gMotionModal.format(1), gFormat.format(40), x, y, z, f);
@@ -2505,7 +2509,10 @@ function setWorkPlane(abc) {
       }
       if (abc.isNonZero()) {
         gRotationModal.reset();
-        writeBlock(gRotationModal.format(68.2), "X" + xyzFormat.format(0), "Y" + xyzFormat.format(0), "Z" + xyzFormat.format(0), "I" + abcFormat.format(abc.x), "J" + abcFormat.format(abc.y), "K" + abcFormat.format(abc.z)); // set frame
+        writeBlock(
+          gRotationModal.format(68.2), "X" + xyzFormat.format(currentSection.workOrigin.x), "Y" + xyzFormat.format(currentSection.workOrigin.y), "Z" + xyzFormat.format(currentSection.workOrigin.z),
+          "I" + abcFormat.format(abc.x), "J" + abcFormat.format(abc.y), "K" + abcFormat.format(abc.z)
+        ); // set frame
         writeBlock(gFormat.format(53.1)); // turn machine
       } else {
         if (!settings.workPlaneMethod.cancelTiltFirst) {
