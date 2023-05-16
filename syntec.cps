@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44063 957e0786edfb03367dd79f0277f5189d621e4f03 $
-  $Date: 2023-04-28 16:43:54 $
+  $Revision: 44066 595dc754de98319ddce25b7bc7c15246072fce54 $
+  $Date: 2023-05-15 12:25:05 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -270,9 +270,9 @@ var iOutput = createReferenceVariable({prefix:"I"}, xyzFormat);
 var jOutput = createReferenceVariable({prefix:"J"}, xyzFormat);
 var kOutput = createReferenceVariable({prefix:"K"}, xyzFormat);
 
-var gMotionModal = createModal({}, gFormat); // modal group 1 // G0-G3, ...
-var gPlaneModal = createModal({onchange:function () {gMotionModal.reset();}}, gFormat); // modal group 2 // G17-19
-var gAbsIncModal = createModal({}, gFormat); // modal group 3 // G90-91
+var gMotionModal = createModal({onchange:function() {if (skipBlocks) {forceModals(gMotionModal);}}}, gFormat); // modal group 1 // G0-G3, ...
+var gPlaneModal  = createModal({onchange:function() {if (skipBlocks) {forceModals(gPlaneModal);} forceModals(gMotionModal);}}, gFormat); // modal group 2 // G17-19
+var gAbsIncModal = createModal({onchange:function() {if (skipBlocks) {forceModals(gAbsIncModal);}}}, gFormat); // modal group 3 // G90-91
 var gFeedModeModal = createModal({}, gFormat); // modal group 5 // G94-95
 var gUnitModal = createModal({}, gFormat); // modal group 6 // G70-71
 var gCycleModal = createModal({}, gFormat); // modal group 9 // G81, ...
@@ -427,11 +427,11 @@ function setSmoothing(mode) {
 }
 
 function onSection() {
-  var forceToolAndRetract = optionalSection && !currentSection.isOptional();
+  var forceSectionRestart = optionalSection && !currentSection.isOptional();
   optionalSection = currentSection.isOptional();
-  var insertToolCall = isToolChangeNeeded("number") || forceToolAndRetract;
-  var newWorkOffset = isNewWorkOffset();
-  var newWorkPlane = isNewWorkPlane();
+  var insertToolCall = isToolChangeNeeded("number") || forceSectionRestart;
+  var newWorkOffset = isNewWorkOffset() || forceSectionRestart;
+  var newWorkPlane = isNewWorkPlane() || forceSectionRestart;
   operationNeedsSafeStart = getProperty("safeStartAllOperations") && !isFirstSection();
   initializeSmoothing(); // initialize smoothing mode
 
@@ -468,6 +468,9 @@ function onSection() {
     startSpindle(tool, insertToolCall);
   }
 
+  // Output modal commands here
+  writeBlock(gPlaneModal.format(17), gAbsIncModal.format(90), gFeedModeModal.format(getProperty("useG95") ? 95 : 94));
+
   // set wcs
   var wcsIsRequired = true;
   if (insertToolCall || operationNeedsSafeStart) {
@@ -481,8 +484,6 @@ function onSection() {
   var abc = defineWorkPlane(currentSection, true);
 
   setSmoothing(smoothing.isAllowed); // writes the required smoothing codes
-
-  writeBlock(gPlaneModal.format(17));
 
   // prepositioning
   var initialPosition = getFramePosition(currentSection.getInitialPosition());
@@ -830,7 +831,7 @@ function onCycleEnd() {
     subprogramEnd();
   }
   if (!cycleExpanded) {
-    writeBlock(conditional(!getProperty("useG95"), gFeedModeModal.format(94)), gCycleModal.format(80));
+    writeBlock(gFeedModeModal.format(getProperty("useG95") ? 95 : 94), gCycleModal.format(80));
     zOutput.reset();
   }
 }
@@ -2237,6 +2238,9 @@ function writeWCS(section, wcsIsRequired) {
 // <<<<< INCLUDED FROM include_files/writeWCS.cpi
 // >>>>> INCLUDED FROM include_files/writeToolCall.cpi
 function writeToolCall(tool, insertToolCall) {
+  if (typeof forceModals == "function" && (insertToolCall || getProperty("safeStartAllOperations"))) {
+    forceModals();
+  }
   writeStartBlocks(insertToolCall, function () {
     if (!retracted) {
       writeRetract(Z);
