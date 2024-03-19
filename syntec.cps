@@ -1,11 +1,11 @@
 /**
-  Copyright (C) 2012-2023 by Autodesk, Inc.
+  Copyright (C) 2012-2024 by Autodesk, Inc.
   All rights reserved.
 
   SYNTEC post processor configuration.
 
-  $Revision: 44104 165ed1a9c77e5601dab85a96f32381c0b4a83b25 $
-  $Date: 2023-12-14 12:10:48 $
+  $Revision: 44115 abe43b1cb5d1c57dbcb926eca04460e350c49211 $
+  $Date: 2024-03-15 10:31:09 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -13,7 +13,7 @@
 description = "SYNTEC";
 vendor = "SYNTEC";
 vendorUrl = "https://syntecamerica.com/";
-legal = "Copyright (C) 2012-2023 by Autodesk, Inc.";
+legal = "Copyright (C) 2012-2024 by Autodesk, Inc.";
 certificationLevel = 2;
 minimumRevision = 45917;
 
@@ -357,7 +357,7 @@ function onOpen() {
   }
 
   writeln("%");
-  writeProgramNumber();
+  writeln("O" + oFormat.format(getProgramNumber()) + conditional(programComment, " " + formatComment(programComment)));
   if (typeof inspectionWriteVariables == "function") { // Probing Surface Inspection
     inspectionWriteVariables();
   }
@@ -1107,11 +1107,16 @@ function validateCommonParameters() {
       error(localize("Using multiple work offsets is not possible if the initial work offset is 0."));
     }
     if (section.isMultiAxis()) {
-      if (!section.isOptimizedForMachine() && !getSetting("supportsToolVectorOutput", false)) {
+      if (!section.isOptimizedForMachine() &&
+        (!getSetting("workPlaneMethod.useTiltedWorkplane", false) || !getSetting("supportsToolVectorOutput", false))) {
         error(localize("This postprocessor requires a machine configuration for 5-axis simultaneous toolpath."));
       }
       if (machineConfiguration.getMultiAxisFeedrateMode() == FEED_INVERSE_TIME && !getSetting("supportsInverseTimeFeed", true)) {
         error(localize("This postprocessor does not support inverse time feedrates."));
+      }
+      if (getSetting("supportsToolVectorOutput", false) && !tcp.isSupportedByControl) {
+        error(localize("Incompatible postprocessor settings detected." + EOL +
+        "Setting 'supportsToolVectorOutput' requires setting 'supportsTCP' to be enabled as well."));
       }
     }
   }
@@ -1569,7 +1574,11 @@ function defineWorkPlane(_section, _setWorkPlane) {
     if (_setWorkPlane) {
       if (_section.isMultiAxis() || isPolarModeActive()) { // 4-5x simultaneous operations
         cancelWorkPlane();
-        positionABC(abc, true);
+        if (_section.isOptimizedForMachine()) {
+          positionABC(abc, true);
+        } else {
+          setCurrentDirection(abc);
+        }
       } else { // 3x and/or 3+2x operations
         setWorkPlane(abc);
       }
@@ -1623,15 +1632,18 @@ function getWorkPlaneMachineABC(_section, rotate) {
 // <<<<< INCLUDED FROM include_files/getWorkPlaneMachineABC.cpi
 // >>>>> INCLUDED FROM include_files/positionABC.cpi
 function positionABC(abc, force) {
+  if (!machineConfiguration.isMultiAxisConfiguration()) {
+    error("Function 'positionABC' can only be used with multi-axis machine configurations.");
+  }
   if (typeof unwindABC == "function") {
     unwindABC(abc);
   }
   if (force) {
     forceABC();
   }
-  var a = machineConfiguration.isMultiAxisConfiguration() ? aOutput.format(abc.x) : toolVectorOutputI.format(abc.x);
-  var b = machineConfiguration.isMultiAxisConfiguration() ? bOutput.format(abc.y) : toolVectorOutputJ.format(abc.y);
-  var c = machineConfiguration.isMultiAxisConfiguration() ? cOutput.format(abc.z) : toolVectorOutputK.format(abc.z);
+  var a = aOutput.format(abc.x);
+  var b = bOutput.format(abc.y);
+  var c = cOutput.format(abc.z);
   if (a || b || c) {
     writeRetract(Z);
     if (getSetting("retract.homeXY.onIndexing", false)) {
@@ -2587,14 +2599,23 @@ function forceWorkPlane() {
   currentWorkPlaneABC = undefined;
 }
 
+function cancelWCSRotation() {
+  if (typeof gRotationModal != "undefined" && gRotationModal.getCurrent() == 68) {
+    cancelWorkPlane(true);
+  }
+}
+
 function cancelWorkPlane(force) {
   if (typeof gRotationModal != "undefined") {
     if (force) {
       gRotationModal.reset();
     }
-    writeBlock(gRotationModal.format(69)); // cancel frame
+    var command = gRotationModal.format(69);
+    if (command) {
+      writeBlock(command); // cancel frame
+      forceWorkPlane();
+    }
   }
-  forceWorkPlane();
 }
 
 function setWorkPlane(abc) {
@@ -2648,8 +2669,8 @@ function setWorkPlane(abc) {
 function writeRetract() {
   var retract = getRetractParameters.apply(this, arguments);
   if (retract && retract.words.length > 0) {
-    if (typeof gRotationModal != "undefined" && gRotationModal.getCurrent() == 68 && settings.retract.cancelRotationOnRetracting) { // cancel rotation before retracting
-      cancelWorkPlane(true);
+    if (typeof cancelWCSRotation == "function" && getSetting("retract.cancelRotationOnRetracting", false)) { // cancel rotation before retracting
+      cancelWCSRotation();
     }
     for (var i in retract.words) {
       var words = retract.singleLine ? retract.words : retract.words[i];
@@ -2857,29 +2878,30 @@ function writeProgramHeader() {
   }
 }
 // <<<<< INCLUDED FROM include_files/writeProgramHeader.cpi
-// >>>>> INCLUDED FROM include_files/writeProgramNumber_fanuc.cpi
-function writeProgramNumber() {
+// >>>>> INCLUDED FROM include_files/getProgramNumber_fanuc.cpi
+function getProgramNumber() {
+  if (typeof oFormat != "undefined" && getProperty("o8")) {
+    oFormat.setWidth(8);
+  }
+  var minimumProgramNumber = getSetting("programNumber.min", 1);
+  var maximumProgramNumber = getSetting("programNumber.max", getProperty("o8") ? 99999999 : 9999);
+  var reservedProgramNumbers = getSetting("programNumber.reserved", [8000, 9999]);
   if (programName) {
-    var programId;
+    var _programNumber;
     try {
-      programId = getAsInt(programName);
+      _programNumber = getAsInt(programName);
     } catch (e) {
       error(localize("Program name must be a number."));
-      return;
     }
-    if (!((programId >= 1) && (programId <= getProperty("o8") ? 99999999 : 9999))) {
-      error(localize("Program number is out of range."));
-      return;
+    if (!((_programNumber >= minimumProgramNumber) && (_programNumber <= maximumProgramNumber))) {
+      error(subst(localize("Program number '%1' is out of range. Please enter a program number between '%2' and '%3'."), _programNumber, minimumProgramNumber, maximumProgramNumber));
     }
-    if ((programId >= 8000) && (programId <= 9999)) {
-      warning(localize("Program number is reserved by tool builder."));
+    if ((_programNumber >= reservedProgramNumbers[0]) && (_programNumber <= reservedProgramNumbers[1])) {
+      warning(subst(localize("Program number '%1' is potentially reserved by the machine tool builder. Reserved range is '%2' to '%3'."), _programNumber, reservedProgramNumbers[0], reservedProgramNumbers[1]));
     }
-
-    oFormat = createFormat({width:(getProperty("o8") ? 8 : 4), zeropad:true, decimals:0});
-    writeln("O" + oFormat.format(programId) + conditional(programComment, " " + formatComment(programComment)));
   } else {
     error(localize("Program name has not been specified."));
-    return;
   }
+  return _programNumber;
 }
-// <<<<< INCLUDED FROM include_files/writeProgramNumber_fanuc.cpi
+// <<<<< INCLUDED FROM include_files/getProgramNumber_fanuc.cpi
