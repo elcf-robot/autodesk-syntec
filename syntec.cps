@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44130 73e79b0e273912da7faf8963316353b63c83f05f $
-  $Date: 2024-06-10 06:52:01 $
+  $Revision: 44131 932990debebb6682fc2eeec860c18e6e6417efcb $
+  $Date: 2024-06-14 09:23:24 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -966,7 +966,7 @@ var state = {
   retractedX              : false, // specifies that the machine has been retracted in X
   retractedY              : false, // specifies that the machine has been retracted in Y
   retractedZ              : false, // specifies that the machine has been retracted in Z
-  tcpisActive             : false, // specifies that TCP is currently active
+  tcpIsActive             : false, // specifies that TCP is currently active
   twpIsActive             : false, // specifies that TWP is currently active
   lengthCompensationActive: !getSetting("outputToolLengthCompensation", true), // specifies that tool length compensation is active
   mainState               : true // specifies the current context of the state (true = main, false = optional)
