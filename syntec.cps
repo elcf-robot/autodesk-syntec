@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44131 932990debebb6682fc2eeec860c18e6e6417efcb $
-  $Date: 2024-06-14 09:23:24 $
+  $Revision: 44143 a6bed23af30910e818b47bd47a2a96f498fdb4f8 $
+  $Date: 2024-09-03 03:29:25 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -33,7 +33,7 @@ minimumCircularSweep = toRad(0.01);
 maximumCircularSweep = toRad(180);
 allowHelicalMoves = true;
 allowedCircularPlanes = undefined; // allow any circular motion
-highFeedrate = (unit == IN) ? 500 : 5000;
+highFeedrate = (unit == MM) ? 5000 : 200;
 
 // user-defined properties
 properties = {
@@ -197,26 +197,26 @@ wcsDefinitions = {
   ]
 };
 
-var gFormat = createFormat({prefix:"G", width:2, zeropad:true, decimals:1});
-var mFormat = createFormat({prefix:"M", width:2, zeropad:true, decimals:1});
-var hFormat = createFormat({prefix:"H", width:2, zeropad:true, decimals:1});
-var diameterOffsetFormat = createFormat({prefix:"D", width:2, zeropad:true, decimals:1});
+var gFormat = createFormat({prefix:"G", minDigitsLeft:2, decimals:1});
+var mFormat = createFormat({prefix:"M", minDigitsLeft:2, decimals:1});
+var hFormat = createFormat({prefix:"H", minDigitsLeft:2, decimals:1});
+var diameterOffsetFormat = createFormat({prefix:"D", minDigitsLeft:2, decimals:1});
 
-var xyzFormat = createFormat({decimals:(unit == MM ? 3 : 4), forceDecimal:true});
-var ijkFormat = createFormat({decimals:6, forceDecimal:true}); // unitless
+var xyzFormat = createFormat({decimals:(unit == MM ? 3 : 4), type:FORMAT_REAL});
+var ijkFormat = createFormat({decimals:6, type:FORMAT_REAL}); // unitless
 var rFormat = xyzFormat; // radius
-var abcFormat = createFormat({decimals:3, forceDecimal:true, scale:DEG});
-var feedFormat = createFormat({decimals:(unit == MM ? 0 : 1), forceDecimal:true});
-var inverseTimeFormat = createFormat({decimals:3, forceDecimal:true});
-var pitchFormat = createFormat({decimals:(unit == MM ? 3 : 4), forceDecimal:true});
+var abcFormat = createFormat({decimals:3, type:FORMAT_REAL, scale:DEG});
+var feedFormat = createFormat({decimals:(unit == MM ? 0 : 1), type:FORMAT_REAL});
+var inverseTimeFormat = createFormat({decimals:3, type:FORMAT_REAL});
+var pitchFormat = createFormat({decimals:(unit == MM ? 3 : 4), type:FORMAT_REAL});
 var toolFormat = createFormat({decimals:0});
 var rpmFormat = createFormat({decimals:0});
-var secFormat = createFormat({decimals:3, forceDecimal:true}); // seconds - range 0.001-99999.999
+var secFormat = createFormat({decimals:3, type:FORMAT_REAL}); // seconds - range 0.001-99999.999
 var milliFormat = createFormat({decimals:0}); // milliseconds // range 1-9999
 var taperFormat = createFormat({decimals:1, scale:DEG});
-var oFormat = createFormat({width:4, zeropad:true, decimals:0});
-var peckFormat = createFormat({decimals:(unit == MM ? 3 : 4), forceDecimal:true});
-// var peckFormat = createFormat({decimals:0, forceDecimal:false, trim:false, width:4, zeropad:true, scale:(unit == MM ? 1000 : 10000)});
+var oFormat = createFormat({minDigitsLeft:4, decimals:0});
+var peckFormat = createFormat({decimals:(unit == MM ? 3 : 4), type:FORMAT_REAL});
+// var peckFormat = createFormat({decimals:0, type:FORMAT_LZS, minDigitsLeft:4, scale:(unit == MM ? 1000 : 10000)});
 
 var xOutput = createOutputVariable({onchange:function() {state.retractedX = false;}, prefix:"X"}, xyzFormat);
 var yOutput = createOutputVariable({onchange:function() {state.retractedY = false;}, prefix:"Y"}, xyzFormat);
@@ -246,7 +246,7 @@ var gUnitModal = createOutputVariable({}, gFormat); // modal group 6 // G70-71
 var gCycleModal = createOutputVariable({}, gFormat); // modal group 9 // G81, ...
 var gRetractModal = createOutputVariable({}, gFormat); // modal group 10 // G98-99
 var fourthAxisClamp = createOutputVariable({}, mFormat);
-var fithAxisClamp = createOutputVariable({}, mFormat);
+var fifthAxisClamp = createOutputVariable({}, mFormat);
 
 var settings = {
   coolant: {
@@ -346,13 +346,13 @@ function onOpen() {
       error(localize("Parametric feed is not supported when using G95."));
       return;
     }
-    feedFormat = createFormat({decimals:(unit == MM ? 4 : 5), forceDecimal:true});
+    feedFormat = createFormat({decimals:(unit == MM ? 4 : 5), type:FORMAT_REAL});
     feedOutput.setFormat(feedFormat);
   }
 
   writeln("%");
   writeln("O" + oFormat.format(getProgramNumber()) + conditional(programComment, " " + formatComment(programComment)));
-  if (typeof inspectionWriteVariables == "function") { // Probing Surface Inspection
+  if (typeof inspectionWriteVariables == "function") {
     inspectionWriteVariables();
   }
   writeProgramHeader();
@@ -834,13 +834,13 @@ function onCommand(command) {
   case COMMAND_LOCK_MULTI_AXIS:
     var outputClampCodes = getProperty("useClampCodes") || currentSection.isMultiAxis();
     if (outputClampCodes && machineConfiguration.isMultiAxisConfiguration()) {
-      writeBlock(fourthAxisClamp.format(10), conditional(machineConfiguration.getNumberOfAxes() > 4, fithAxisClamp.format(110))); // lock 4th + 5th axis
+      writeBlock(fourthAxisClamp.format(10), conditional(machineConfiguration.getNumberOfAxes() > 4, fifthAxisClamp.format(110))); // lock 4th + 5th axis
     }
     return;
   case COMMAND_UNLOCK_MULTI_AXIS:
     var outputClampCodes = getProperty("useClampCodes") || currentSection.isMultiAxis();
     if (outputClampCodes && machineConfiguration.isMultiAxisConfiguration()) {
-      writeBlock(fourthAxisClamp.format(11), conditional(machineConfiguration.getNumberOfAxes() > 4, fithAxisClamp.format(111))); // unlock 4th + 5th axis
+      writeBlock(fourthAxisClamp.format(11), conditional(machineConfiguration.getNumberOfAxes() > 4, fifthAxisClamp.format(111))); // unlock 4th + 5th axis
     }
     return;
   case COMMAND_START_CHIP_TRANSPORT:
@@ -872,12 +872,13 @@ function onSectionEnd() {
   }
   writeBlock(gPlaneModal.format(17));
 
-  if (((getCurrentSectionId() + 1) >= getNumberOfSections()) ||
-      (tool.number != getNextSection().getTool().number)) {
-    onCommand(COMMAND_BREAK_CONTROL);
-  }
-  if (!isLastSection() && (getNextSection().getTool().coolant != tool.coolant)) {
-    setCoolant(COOLANT_OFF);
+  if (!isLastSection()) {
+    if (getNextSection().getTool().coolant != tool.coolant) {
+      setCoolant(COOLANT_OFF);
+    }
+    if (tool.breakControl && isToolChangeNeeded(getNextSection(), getProperty("toolAsName") ? "description" : "number")) {
+      onCommand(COMMAND_BREAK_CONTROL);
+    }
   }
 
   if (subprogramsAreSupported()) {
@@ -1080,7 +1081,9 @@ function validateCommonParameters() {
   for (var i = 0; i < getNumberOfSections(); ++i) {
     var section = getSection(i);
     if (getSection(0).workOffset == 0 && section.workOffset > 0) {
-      error(localize("Using multiple work offsets is not possible if the initial work offset is 0."));
+      if (!(typeof wcsDefinitions != "undefined" && wcsDefinitions.useZeroOffset)) {
+        error(localize("Using multiple work offsets is not possible if the initial work offset is 0."));
+      }
     }
     if (section.isMultiAxis()) {
       if (!section.isOptimizedForMachine() &&
@@ -2889,7 +2892,7 @@ function writeProgramHeader() {
 // >>>>> INCLUDED FROM include_files/getProgramNumber_fanuc.cpi
 function getProgramNumber() {
   if (typeof oFormat != "undefined" && getProperty("o8")) {
-    oFormat.setWidth(8);
+    oFormat.setMinDigitsLeft(8);
   }
   var minimumProgramNumber = getSetting("programNumber.min", 1);
   var maximumProgramNumber = getSetting("programNumber.max", getProperty("o8") ? 99999999 : 9999);
