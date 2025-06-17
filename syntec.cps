@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44174 c9be104562752d2d82655075e0367708843f3963 $
-  $Date: 2025-04-17 13:58:42 $
+  $Revision: 44182 7116c353db967b3101893a9fbf082bfdfea871ba $
+  $Date: 2025-06-13 07:24:07 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -141,6 +141,14 @@ properties = {
     ],
     value: "P2",
     scope: "post"
+  },
+  useTiltedWorkplane: {
+    title      : "Use G68.2",
+    description: "Enable to use G68.2 for 3+2 operations.",
+    group      : "multiAxis",
+    type       : "boolean",
+    value      : true,
+    scope      : "post"
   },
   usePitchForTapping: {
     title      : "Use pitch for tapping",
@@ -319,7 +327,8 @@ var settings = {
   },
   maximumSequenceNumber         : 8999, // the maximum sequence number (Nxxx), use 'undefined' for unlimited
   supportsToolVectorOutput      : true, // specifies if the control does support tool axis vector output for multi axis toolpath
-  allowCancelTCPBeforeRetracting: true // allows TCP/tool length compensation to be canceled prior retracting. Warning, ensure machine parameters 5006.6(Fanuc)/F114 bit 1(Mazak) are set to prevent axis motion when cancelling compensation.
+  allowCancelTCPBeforeRetracting: true, // allows TCP/tool length compensation to be canceled prior retracting. Warning, ensure machine parameters 5006.6(Fanuc)/F114 bit 1(Mazak) are set to prevent axis motion when cancelling compensation.
+  polarCycleExpandMode          : EXPAND_TCP // EXPAND_NONE: Does not expand any cycles. EXPAND_TCP: Expands drilling cycles, when TCP is on. EXPAND_NON_TCP: Expands drilling cycles, when TCP is off. EXPAND_ALL: Expands all drilling cycles
 };
 
 function onOpen() {
@@ -470,15 +479,18 @@ function onCycle() {
 
 function getCommonCycle(x, y, z, r, c) {
   forceXYZ(); // force xyz on first drill hole of any cycle
-  if (subprogramState.incrementalMode) {
-    zOutput.format(c);
-    return [xOutput.format(x), yOutput.format(y),
-      "Z" + xyzFormat.format(z - r),
-      "R" + xyzFormat.format(r - c)];
-  } else {
-    return [xOutput.format(x), yOutput.format(y),
-      zOutput.format(z),
+  if (currentSection.polarMode != POLAR_MODE_OFF && currentSection.isMultiAxis()) {
+    var polarPosition = getPolarPosition(x, y, z);
+    return [xOutput.format(polarPosition.first.x), yOutput.format(polarPosition.first.y), zOutput.format(polarPosition.first.z),
+      aOutput.format(polarPosition.second.x), bOutput.format(polarPosition.second.y), cOutput.format(polarPosition.second.z),
       "R" + xyzFormat.format(r)];
+  } else {
+    if (subprogramsAreSupported() && subprogramState.incrementalMode) {
+      zOutput.format(c);
+      return [xOutput.format(x), yOutput.format(y), "Z" + xyzFormat.format(z - r), "R" + xyzFormat.format(r - c)];
+    } else {
+      return [xOutput.format(x), yOutput.format(y), zOutput.format(z), "R" + xyzFormat.format(r)];
+    }
   }
 }
 
@@ -501,10 +513,10 @@ function onCyclePoint(x, y, z) {
     expandCyclePoint(x, y, z);
     return;
   }
-
   if (isFirstCyclePoint()) {
     repositionToCycleClearance(cycle, x, y, z);
 
+    writeBlock(gFeedModeModal.format(getProperty("useG95") || (isTappingCycle() && getProperty("usePitchForTapping")) ? 95 : 94));
     var F = cycle.feedrate;
     if (getProperty("useG95")) {
       F /= spindleSpeed;
@@ -562,64 +574,18 @@ function onCyclePoint(x, y, z) {
       }
       break;
     case "tapping":
-      if (getProperty("usePitchForTapping")) {
-        writeBlock(
-          gRetractModal.format(98), gFeedModeModal.format(95), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND) ? 74 : 84),
-          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-          "P" + milliFormat.format(P),
-          pitchOutput.format(tool.threadPitch)
-        );
-        forceFeed();
-      } else {
-        var tappingFPM = tool.getThreadPitch() * rpmFormat.getResultingValue(spindleSpeed);
-        F = (getProperty("useG95") ? tool.getThreadPitch() : tappingFPM);
-        writeBlock(
-          gRetractModal.format(98), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND) ? 74 : 84),
-          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-          "P" + milliFormat.format(P),
-          feedOutput.format(F)
-        );
-      }
-      break;
     case "left-tapping":
-      if (getProperty("usePitchForTapping")) {
-        writeBlock(
-          gRetractModal.format(98), gFeedModeModal.format(95), gCycleModal.format(74),
-          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-          "P" + milliFormat.format(P),
-          pitchOutput.format(tool.threadPitch)
-        );
-        forceFeed();
-      } else {
-        var tappingFPM = tool.getThreadPitch() * rpmFormat.getResultingValue(spindleSpeed);
-        F = (getProperty("useG95") ? tool.getThreadPitch() : tappingFPM);
-        writeBlock(
-          gRetractModal.format(98), gCycleModal.format(74),
-          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-          "P" + milliFormat.format(P),
-          feedOutput.format(F)
-        );
-      }
-      break;
     case "right-tapping":
-      if (getProperty("usePitchForTapping")) {
-        writeBlock(
-          gRetractModal.format(98), gFeedModeModal.format(95), gCycleModal.format(84),
-          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-          "P" + milliFormat.format(P),
-          pitchOutput.format(tool.threadPitch)
-        );
-        forceFeed();
-      } else {
-        var tappingFPM = tool.getThreadPitch() * rpmFormat.getResultingValue(spindleSpeed);
-        F = (getProperty("useG95") ? tool.getThreadPitch() : tappingFPM);
-        writeBlock(
-          gRetractModal.format(98), gCycleModal.format(84),
-          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-          "P" + milliFormat.format(P),
-          feedOutput.format(F)
-        );
-      }
+      var cycleCode = (cycleType == "left-tapping" || (cycleType == "tapping" && tool.type == TOOL_TAP_LEFT_HAND)) ? 74 : 84;
+      var tappingFPM = tool.getThreadPitch() * rpmFormat.getResultingValue(spindleSpeed);
+      F = (getProperty("useG95") || getProperty("usePitchForTapping") ? tool.getThreadPitch() : tappingFPM);
+      writeBlock(
+        gRetractModal.format(98), gCycleModal.format(cycleCode),
+        getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
+        "P" + milliFormat.format(P),
+        getProperty("usePitchForTapping") ? pitchOutput.format(F) : feedOutput.format(F)
+      );
+      forceFeed();
       break;
     case "tapping-with-chip-breaking":
     case "left-tapping-with-chip-breaking":
@@ -628,26 +594,17 @@ function onCyclePoint(x, y, z) {
         error(localize("Accumulated pecking depth is not supported for tapping cycles with chip breaking."));
         return;
       } else {
-        if (getProperty("usePitchForTapping")) {
-          writeBlock(
-            gRetractModal.format(98), gFeedModeModal.format(95), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND) ? 74 : 84),
-            getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-            "P" + milliFormat.format(P),
-            peckOutput.format(cycle.incrementalDepth),
-            pitchOutput.format(tool.threadPitch)
-          );
-          forceFeed();
-        } else {
-          var tappingFPM = tool.getThreadPitch() * rpmFormat.getResultingValue(spindleSpeed);
-          F = (getProperty("useG95") ? tool.getThreadPitch() : tappingFPM);
-          writeBlock(
-            gRetractModal.format(98), gCycleModal.format((tool.type == TOOL_TAP_LEFT_HAND) ? 74 : 84),
-            getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
-            "P" + milliFormat.format(P),
-            peckOutput.format(cycle.incrementalDepth),
-            feedOutput.format(F)
-          );
-        }
+        var cycleCode = (cycleType == "left-tapping-with-chip-breaking" || (cycleType == "tapping-with-chip-breaking" && tool.type == TOOL_TAP_LEFT_HAND)) ? 74 : 84;
+        var tappingFPM = tool.getThreadPitch() * rpmFormat.getResultingValue(spindleSpeed);
+        F = (getProperty("useG95") || getProperty("usePitchForTapping") ? tool.getThreadPitch() : tappingFPM);
+        writeBlock(
+          gRetractModal.format(98), gCycleModal.format(cycleCode),
+          getCommonCycle(x, y, z, cycle.retract, cycle.clearance),
+          "P" + milliFormat.format(P),
+          peckOutput.format(cycle.incrementalDepth),
+          getProperty("usePitchForTapping") ? pitchOutput.format(F) : feedOutput.format(F)
+        );
+        forceFeed();
       }
       break;
     case "fine-boring":
@@ -768,11 +725,18 @@ function onCyclePoint(x, y, z) {
           break;
         }
       }
-      if (subprogramState.incrementalMode) { // set current position to retract height
+      if (subprogramsAreSupported() && subprogramState.incrementalMode) { // set current position to retract height
         setCyclePosition(cycle.retract);
       }
-      writeBlock(xOutput.format(x), yOutput.format(y), zOutput.format(z));
-      if (subprogramState.incrementalMode) { // set current position to clearance height
+      if (currentSection.polarMode != POLAR_MODE_OFF && currentSection.isMultiAxis()) {
+        var polarPosition = getPolarPosition(x, y, z);
+        setCurrentPositionAndDirection(polarPosition);
+        writeBlock(xOutput.format(polarPosition.first.x), yOutput.format(polarPosition.first.y), zOutput.format(polarPosition.first.z),
+          aOutput.format(polarPosition.second.x), bOutput.format(polarPosition.second.y), cOutput.format(polarPosition.second.z));
+      } else {
+        writeBlock(xOutput.format(x), yOutput.format(y), zOutput.format(z));
+      }
+      if (subprogramsAreSupported() && subprogramState.incrementalMode) { // set current position to clearance height
         setCyclePosition(cycle.clearance);
       }
     }
@@ -1027,6 +991,10 @@ function activateMachine() {
   }
   if (typeof safeRetractDistance == "number" && getProperty("safeRetractDistance") != undefined && getProperty("safeRetractDistance") != 0) {
     safeRetractDistance = getProperty("safeRetractDistance");
+  }
+
+  if (revision >= 50294)  {
+    activateAutoPolarMode({tolerance:tolerance / 2, optimizeType:OPTIMIZE_AXIS, expandCycles:getSetting("polarCycleExpandMode", EXPAND_ALL)});
   }
 
   if (machineConfiguration.isHeadConfiguration() && getSetting("workPlaneMethod.compensateToolLength", false)) {
