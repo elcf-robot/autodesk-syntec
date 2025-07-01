@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44182 7116c353db967b3101893a9fbf082bfdfea871ba $
-  $Date: 2025-06-13 07:24:07 $
+  $Revision: 44184 4a476cddfb340b6d03fbc2675407091c182605b4 $
+  $Date: 2025-06-25 11:13:43 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -328,7 +328,7 @@ var settings = {
   maximumSequenceNumber         : 8999, // the maximum sequence number (Nxxx), use 'undefined' for unlimited
   supportsToolVectorOutput      : true, // specifies if the control does support tool axis vector output for multi axis toolpath
   allowCancelTCPBeforeRetracting: true, // allows TCP/tool length compensation to be canceled prior retracting. Warning, ensure machine parameters 5006.6(Fanuc)/F114 bit 1(Mazak) are set to prevent axis motion when cancelling compensation.
-  polarCycleExpandMode          : EXPAND_TCP // EXPAND_NONE: Does not expand any cycles. EXPAND_TCP: Expands drilling cycles, when TCP is on. EXPAND_NON_TCP: Expands drilling cycles, when TCP is off. EXPAND_ALL: Expands all drilling cycles
+  polarCycleExpandMode          : 1 // 0=EXPAND_NONE: Does not expand any cycles. 1=EXPAND_TCP: Expands drilling cycles, when TCP is on. 2=EXPAND_NON_TCP: Expands drilling cycles, when TCP is off. 3=EXPAND_ALL: Expands all drilling cycles
 };
 
 function onOpen() {
@@ -479,7 +479,7 @@ function onCycle() {
 
 function getCommonCycle(x, y, z, r, c) {
   forceXYZ(); // force xyz on first drill hole of any cycle
-  if (currentSection.polarMode != POLAR_MODE_OFF && currentSection.isMultiAxis()) {
+  if ((currentSection.getPolarMode && currentSection.getPolarMode() != POLAR_MODE_OFF) && currentSection.isMultiAxis()) {
     var polarPosition = getPolarPosition(x, y, z);
     return [xOutput.format(polarPosition.first.x), yOutput.format(polarPosition.first.y), zOutput.format(polarPosition.first.z),
       aOutput.format(polarPosition.second.x), bOutput.format(polarPosition.second.y), cOutput.format(polarPosition.second.z),
@@ -728,7 +728,7 @@ function onCyclePoint(x, y, z) {
       if (subprogramsAreSupported() && subprogramState.incrementalMode) { // set current position to retract height
         setCyclePosition(cycle.retract);
       }
-      if (currentSection.polarMode != POLAR_MODE_OFF && currentSection.isMultiAxis()) {
+      if ((currentSection.getPolarMode && currentSection.getPolarMode() != POLAR_MODE_OFF) && currentSection.isMultiAxis()) {
         var polarPosition = getPolarPosition(x, y, z);
         setCurrentPositionAndDirection(polarPosition);
         writeBlock(xOutput.format(polarPosition.first.x), yOutput.format(polarPosition.first.y), zOutput.format(polarPosition.first.z),
