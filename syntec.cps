@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44184 4a476cddfb340b6d03fbc2675407091c182605b4 $
-  $Date: 2025-06-25 11:13:43 $
+  $Revision: 44187 e5b7101e3e3d4be720eb5f7ef1215fd6bea618b9 $
+  $Date: 2025-07-17 05:22:31 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -306,7 +306,7 @@ var settings = {
     eulerCalculationMethod: "standard", // ('standard' / 'machine') 'machine' adjusts euler angles to match the machines ABC orientation, machine configuration required
     cancelTiltFirst       : true, // cancel tilted workplane prior to WCS (G54-G59) blocks
     forceMultiAxisIndexing: false, // force multi-axis indexing for 3D programs
-    optimizeType          : undefined // can be set to OPTIMIZE_NONE, OPTIMIZE_BOTH, OPTIMIZE_TABLES, OPTIMIZE_HEADS, OPTIMIZE_AXIS. 'undefined' uses legacy rotations
+    optimizeType          : OPTIMIZE_AXIS // can be set to OPTIMIZE_NONE, OPTIMIZE_BOTH, OPTIMIZE_TABLES, OPTIMIZE_HEADS, OPTIMIZE_AXIS. 'undefined' uses legacy rotations
   },
   subprograms: {
     initialSubprogramNumber: 9001, // specifies the initial number to be used for subprograms. 'undefined' uses the main program number
