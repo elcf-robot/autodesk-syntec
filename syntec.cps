@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44192 e342e4ca9f31b4c80e76467e990dd05b641d3c43 $
-  $Date: 2025-09-01 12:45:50 $
+  $Revision: 44193 35401cbbd9b03187ad014fa3a84a5d2e26c0715e $
+  $Date: 2025-09-04 13:33:25 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -484,8 +484,7 @@ function onDwell(seconds) {
     warning(subst(localize("Dwelling time of '%1' exceeds the maximum value of '%2' in operation '%3'"), seconds, maxValue, getParameter("operation-comment", "")));
   }
   milliseconds = clamp(1, seconds * 1000, 99999999);
-  writeBlock(gFeedModeModal.format(94), gFormat.format(4), "P" + milliFormat.format(milliseconds));
-  writeBlock(gFeedModeModal.format(getProperty("useG95") ? 95 : 94)); // back to G95
+  writeBlock(gFormat.format(4), "P" + milliFormat.format(milliseconds));
 }
 
 function onSpindleSpeed(spindleSpeed) {
