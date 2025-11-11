@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44195 c67837c91fb96c689e965d0ae2b5289c6a8b646c $
-  $Date: 2025-09-16 09:02:54 $
+  $Revision: 44202 75321388625570b1eb8f09c1a5b057c8e188ae50 $
+  $Date: 2025-11-07 10:23:36 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -1454,7 +1454,7 @@ var isTcpOn;
   machineSimulation({x:toPreciseUnit(200, MM), y:toPreciseUnit(200, MM), coordinates:MACHINE, mode:TOOLCHANGE});
 */
 function machineSimulation(parameters) {
-  if (revision < 50198 || skipBlocks) {
+  if (revision < 50198 || skipBlocks || (getSimulationStreamPath() == "" && !debugSimulation)) {
     return; // return when post kernel revision is lower than 50198 or when skipBlocks is enabled
   }
   getAxisLimit = function(axis, limit) {
