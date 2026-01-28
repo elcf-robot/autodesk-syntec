@@ -1,11 +1,11 @@
 /**
-  Copyright (C) 2012-2025 by Autodesk, Inc.
+  Copyright (C) 2012-2026 by Autodesk, Inc.
   All rights reserved.
 
   SYNTEC post processor configuration.
 
-  $Revision: 44207 3c29ebc507e8e59a0898c47558016451f197da94 $
-  $Date: 2025-12-17 08:29:21 $
+  $Revision: 44210 ffe0eb09a5649b934d239c6145bde9ed20754f4a $
+  $Date: 2026-01-20 22:18:16 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -13,7 +13,7 @@
 description = "SYNTEC";
 vendor = "SYNTEC";
 vendorUrl = "https://syntecamerica.com/";
-legal = "Copyright (C) 2012-2025 by Autodesk, Inc.";
+legal = "Copyright (C) 2012-2026 by Autodesk, Inc.";
 certificationLevel = 2;
 minimumRevision = 45917;
 
@@ -935,6 +935,9 @@ function activateMachine() {
   // identify if any of the rotary axes has TCP enabled
   var axes = [machineConfiguration.getAxisU(), machineConfiguration.getAxisV(), machineConfiguration.getAxisW()];
   tcp.isSupportedByMachine = axes.some(function(axis) {return axis.isEnabled() && axis.isTCPEnabled();}); // true if TCP is enabled on any rotary axis
+  if (tcp.isSupportedByMachine) {
+    bufferRotaryMoves = false; // disable bufferRotaryMoves if TCP is enabled on any rotary axis
+  }
 
   // save multi-axis feedrate settings from machine configuration
   var mode = machineConfiguration.getMultiAxisFeedrateMode();
