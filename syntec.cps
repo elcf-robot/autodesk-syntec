@@ -4,8 +4,8 @@
 
   SYNTEC post processor configuration.
 
-  $Revision: 44210 ffe0eb09a5649b934d239c6145bde9ed20754f4a $
-  $Date: 2026-01-20 22:18:16 $
+  $Revision: 44213 2a132b5cae8d5827ea3f7d1f18907fb5fa628933 $
+  $Date: 2026-02-11 06:46:11 $
 
   FORKID {18F70A54-37DF-4F79-9BF0-3BBDC2B4FF72}
 */
@@ -25,6 +25,9 @@ setCodePage("ascii");
 
 capabilities = CAPABILITY_MILLING | CAPABILITY_MACHINE_SIMULATION;
 tolerance = spatial(0.002, MM);
+if (typeof revision == "number") {
+  supportedFeatures |= revision >= 50328 ? FEATURE_MACHINE_ROTARY_ANGLES : 0;
+}
 
 minimumChordLength = spatial(0.25, MM);
 minimumCircularRadius = spatial(0.01, MM);
@@ -2818,6 +2821,7 @@ function writeInitialPositioning(position, isRequired, codes1, codes2) {
     }
 
     if (machineConfiguration.isHeadConfiguration()) { // head/head head/table kinematics
+      cancelTransformation();
       var machineABC = currentSection.isMultiAxis() ? defineWorkPlane(currentSection, false) : getWorkPlaneMachineABC(currentSection, false);
       machineConfiguration.setToolLength(getSetting("workPlaneMethod.compensateToolLength", false) ? getBodyLength(currentSection.getTool()) : 0); // define the tool length for head adjustments
       var mode = currentSection.isOptimizedForMachine() ? TCP_XYZ_OPTIMIZED : TCP_XYZ;
